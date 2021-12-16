@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,25 +26,26 @@ typedef void (* Destroyer)(void);
 
 namespace MaNGOS
 {
-    void MANGOS_DLL_SPEC at_exit( void (*func)() );
+    void at_exit(void (*func)());
 
-    template <class T>
-        class MANGOS_DLL_DECL ObjectLifeTime
+    template<class T>
+    class ObjectLifeTime
     {
         public:
-            static void ScheduleCall(void (*destroyer)() )
+
+            static void ScheduleCall(void (*destroyer)())
             {
-                at_exit( destroyer );
+                at_exit(destroyer);
             }
 
-            DECLSPEC_NORETURN static void OnDeadReference(void) ATTR_NORETURN;
-
+            DECLSPEC_NORETURN static void OnDeadReference() ATTR_NORETURN;
     };
 
     template <class T>
-        void ObjectLifeTime<T>::OnDeadReference(void)       // We don't handle Dead Reference for now
+    void ObjectLifeTime<T>::OnDeadReference()           // We don't handle Dead Reference for now
     {
         throw std::runtime_error("Dead Reference");
     }
 }
+
 #endif

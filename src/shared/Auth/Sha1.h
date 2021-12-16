@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,17 +31,17 @@ class Sha1Hash
         Sha1Hash();
         ~Sha1Hash();
 
-        void UpdateFinalizeBigNumbers(BigNumber *bn0, ...);
-        void UpdateBigNumbers(BigNumber *bn0, ...);
+        void UpdateBigNumbers(BigNumber* bn0, ...);
 
-        void UpdateData(const uint8 *dta, int len);
-        void UpdateData(const std::string &str);
+        void UpdateData(const uint8* dta, int len);
+        void UpdateData(const std::vector<uint8>& data);
+        void UpdateData(const std::string& str);
 
         void Initialize();
         void Finalize();
 
-        uint8 *GetDigest(void) { return mDigest; };
-        int GetLength(void) { return SHA_DIGEST_LENGTH; };
+        uint8* GetDigest(void) { return mDigest; };
+        static int GetLength(void) { return SHA_DIGEST_LENGTH; };
 
     private:
         SHA_CTX mC;

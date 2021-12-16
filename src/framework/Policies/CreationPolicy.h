@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,62 +27,79 @@ namespace MaNGOS
     /**
      * OperatorNew policy creates an object on the heap using new.
      */
-    template <class T>
-        class MANGOS_DLL_DECL OperatorNew
+    template<class T>
+    class OperatorNew
     {
         public:
-            static T* Create(void) { return (new T); }
-            static void Destroy(T *obj) { delete obj; }
+
+            static T* Create()
+            {
+                return (new T);
+            }
+
+            static void Destroy(T* obj)
+            {
+                delete obj;
+            }
     };
 
     /**
      * LocalStaticCreation policy creates an object on the stack
      * the first time call Create.
      */
-    template <class T>
-        class MANGOS_DLL_DECL LocalStaticCreation
+    template<class T>
+    class LocalStaticCreation
     {
-        union MaxAlign
-        {
-            char t_[sizeof(T)];
-            short int shortInt_;
-            int int_;
-            long int longInt_;
-            float float_;
-            double double_;
-            long double longDouble_;
-            struct Test;
-            int Test::* pMember_;
-            int (Test::*pMemberFn_)(int);
-        };
+            union MaxAlign
+            {
+                char t_[sizeof(T)];
+                short int shortInt_;
+                int int_;
+                long int longInt_;
+                float float_;
+                double double_;
+                long double longDouble_;
+                struct Test;
+                int Test::* pMember_;
+                int (Test::*pMemberFn_)(int);
+            };
+
         public:
-            static T* Create(void)
+
+            static T* Create()
             {
                 static MaxAlign si_localStatic;
-                return new(&si_localStatic) T;
+                return new (&si_localStatic) T;
             }
 
-            static void Destroy(T *obj) { obj->~T(); }
+            static void Destroy(T* obj)
+            {
+                obj->~T();
+            }
     };
 
     /**
      * CreateUsingMalloc by pass the memory manger.
      */
     template<class T>
-        class MANGOS_DLL_DECL CreateUsingMalloc
+    class CreateUsingMalloc
     {
         public:
+
             static T* Create()
             {
-                void* p = ::malloc(sizeof(T));
-                if (!p) return 0;
-                return new(p) T;
+                void* p = malloc(sizeof(T));
+
+                if (!p)
+                    return nullptr;
+
+                return new (p) T;
             }
 
             static void Destroy(T* p)
             {
                 p->~T();
-                ::free(p);
+                free(p);
             }
     };
 
@@ -90,7 +107,7 @@ namespace MaNGOS
      * CreateOnCallBack creates the object base on the call back.
      */
     template<class T, class CALL_BACK>
-        class MANGOS_DLL_DECL CreateOnCallBack
+    class CreateOnCallBack
     {
         public:
             static T* Create()
@@ -98,10 +115,11 @@ namespace MaNGOS
                 return CALL_BACK::createCallBack();
             }
 
-            static void Destroy(T *p)
+            static void Destroy(T* p)
             {
                 CALL_BACK::destroyCallBack(p);
             }
     };
 }
+
 #endif

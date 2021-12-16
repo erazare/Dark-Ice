@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,63 +17,224 @@
  */
 
 #include "SQLStorage.h"
-#include "SQLStorageImpl.h"
 
-#ifdef DO_POSTGRESQL
-extern DatabasePostgre  WorldDatabase;
-#else
-extern DatabaseMysql  WorldDatabase;
-#endif
+// -----------------------------------  SQLStorageBase  ---------------------------------------- //
 
-const char CreatureInfosrcfmt[]="iiiiiiiiiisssiiiiiiiiiiiffiffiifiiiiiiiiiiffiiiiiiiiiiiiiiiiiiisiiffliiiiiiiliiis";
-const char CreatureInfodstfmt[]="iiiiiiiiiisssiiiiiiiiiiiffiffiifiiiiiiiiiiffiiiiiiiiiiiiiiiiiiisiiffliiiiiiiliiii";
-const char CreatureDataAddonInfofmt[]="iiiiiis";
-const char CreatureModelfmt[]="iffbi";
-const char CreatureInfoAddonInfofmt[]="iiiiiis";
-const char EquipmentInfofmt[]="iiii";
-const char GameObjectInfosrcfmt[]="iiissssiifiiiiiiiiiiiiiiiiiiiiiiiiiiiiiis";
-const char GameObjectInfodstfmt[]="iiissssiifiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii";
-const char ItemPrototypesrcfmt[]="iiiisiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffiffiiiiiiiiiifiiifiiiiiifiiiiiifiiiiiifiiiiiifiiiisiiiiiiiiiiiiiiiiiiiiiiiiifiiisiiii";
-const char ItemPrototypedstfmt[]="iiiisiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffiffiiiiiiiiiifiiifiiiiiifiiiiiifiiiiiifiiiiiifiiiisiiiiiiiiiiiiiiiiiiiiiiiiifiiiiiiii";
-const char PageTextfmt[]="isi";
-const char InstanceTemplatesrcfmt[]="iiiiffffs";
-const char InstanceTemplatedstfmt[]="iiiiffffi";
+SQLStorageBase::SQLStorageBase() :
+    m_tableName(nullptr),
+    m_entry_field(nullptr),
+    m_src_format(nullptr),
+    m_dst_format(nullptr),
+    m_dstFieldCount(0),
+    m_srcFieldCount(0),
+    m_recordCount(0),
+    m_maxEntry(0),
+    m_recordSize(0),
+    m_data(nullptr)
+{}
 
-SQLStorage sCreatureStorage(CreatureInfosrcfmt, CreatureInfodstfmt, "entry","creature_template");
-SQLStorage sCreatureDataAddonStorage(CreatureDataAddonInfofmt,"guid","creature_addon");
-SQLStorage sCreatureModelStorage(CreatureModelfmt,"modelid","creature_model_info");
-SQLStorage sCreatureInfoAddonStorage(CreatureInfoAddonInfofmt,"entry","creature_template_addon");
-SQLStorage sEquipmentStorage(EquipmentInfofmt,"entry","creature_equip_template");
-SQLStorage sGOStorage(GameObjectInfosrcfmt, GameObjectInfodstfmt, "entry","gameobject_template");
-SQLStorage sItemStorage(ItemPrototypesrcfmt, ItemPrototypedstfmt, "entry","item_template");
-SQLStorage sPageTextStore(PageTextfmt,"entry","page_text");
-SQLStorage sInstanceTemplate(InstanceTemplatesrcfmt, InstanceTemplatedstfmt, "map","instance_template");
-
-void SQLStorage::Free ()
+void SQLStorageBase::Initialize(const char* tableName, const char* entry_field, const char* src_format, const char* dst_format)
 {
-    uint32 offset=0;
-    for(uint32 x=0;x<iNumFields;x++)
-        if (dst_format[x]==FT_STRING)
-        {
-            for(uint32 y=0;y<MaxEntry;y++)
-                if(pIndex[y])
-                    delete [] *(char**)((char*)(pIndex[y])+offset);
+    m_tableName = tableName;
+    m_entry_field = entry_field;
+    m_src_format = src_format;
+    m_dst_format = dst_format;
 
-            offset += sizeof(char*);
-        }
-        else if (dst_format[x]==FT_LOGIC)
-            offset += sizeof(bool);
-        else if (dst_format[x]==FT_BYTE)
-            offset += sizeof(char);
-        else
-            offset += 4;
-
-    delete [] pIndex;
-    delete [] data;
+    m_srcFieldCount = strlen(m_src_format);
+    m_dstFieldCount = strlen(m_dst_format);
 }
 
-void SQLStorage::Load()
+char* SQLStorageBase::createRecord(uint32 recordId)
+{
+    char* newRecord = &m_data[m_recordCount * m_recordSize];
+    ++m_recordCount;
+
+    JustCreatedRecord(recordId, newRecord);
+    return newRecord;
+}
+
+void SQLStorageBase::prepareToLoad(uint32 maxEntry, uint32 recordCount, uint32 recordSize)
+{
+    m_maxEntry = maxEntry;
+    m_recordSize = recordSize;
+
+    delete[] m_data;
+    m_data = new char[recordCount * m_recordSize];
+    memset(m_data, 0, recordCount * m_recordSize);
+
+    m_recordCount = 0;
+}
+
+// Function to delete the data
+void SQLStorageBase::Free()
+{
+    if (!m_data)
+        return;
+
+    uint32 offset = 0;
+    for (uint32 x = 0; x < m_dstFieldCount; ++x)
+    {
+        switch (m_dst_format[x])
+        {
+            case FT_LOGIC:
+                offset += sizeof(bool);
+                break;
+            case FT_STRING:
+            {
+                for (uint32 recordItr = 0; recordItr < m_recordCount; ++recordItr)
+                    delete[] *(char**)((char*)(m_data + (recordItr * m_recordSize)) + offset);
+
+                offset += sizeof(char*);
+                break;
+            }
+            case FT_NA:
+            case FT_INT:
+                offset += sizeof(uint32);
+                break;
+            case FT_BYTE:
+            case FT_NA_BYTE:
+                offset += sizeof(char);
+                break;
+            case FT_FLOAT:
+            case FT_NA_FLOAT:
+                offset += sizeof(float);
+                break;
+            case FT_NA_POINTER:
+                // TODO- possible (and small) memleak here possible
+                offset += sizeof(char*);
+                break;
+            case FT_64BITINT:
+                offset += sizeof(uint64);
+                break;
+            case FT_IND:
+            case FT_SORT:
+                assert(false && "SQL storage not have sort field types");
+                break;
+            default:
+                assert(false && "unknown format character");
+                break;
+        }
+    }
+    delete[] m_data;
+    m_data = nullptr;
+    m_recordCount = 0;
+}
+
+// -----------------------------------  SQLStorage  -------------------------------------------- //
+
+void SQLStorage::EraseEntry(uint32 id)
+{
+    m_Index[id] = nullptr;
+}
+
+void SQLStorage::Free()
+{
+    SQLStorageBase::Free();
+    delete[] m_Index;
+    m_Index = nullptr;
+}
+
+void SQLStorage::Load(bool error_at_empty /*= true*/)
 {
     SQLStorageLoader loader;
+    loader.Load(*this, error_at_empty);
+}
+
+SQLStorage::SQLStorage(const char* fmt, const char* _entry_field, const char* sqlname)
+{
+    Initialize(sqlname, _entry_field, fmt, fmt);
+    m_Index = nullptr;
+}
+
+SQLStorage::SQLStorage(const char* src_fmt, const char* dst_fmt, const char* _entry_field, const char* sqlname)
+{
+    Initialize(sqlname, _entry_field, src_fmt, dst_fmt);
+    m_Index = nullptr;
+}
+
+void SQLStorage::prepareToLoad(uint32 maxRecordId, uint32 recordCount, uint32 recordSize)
+{
+    // Clear (possible) old data and old index array
+    Free();
+
+    // Set index array
+    m_Index = new char* [maxRecordId];
+    memset(m_Index, 0, maxRecordId * sizeof(char*));
+
+    SQLStorageBase::prepareToLoad(maxRecordId, recordCount, recordSize);
+}
+
+// -----------------------------------  SQLHashStorage  ---------------------------------------- //
+void SQLHashStorage::Load()
+{
+    SQLHashStorageLoader loader;
     loader.Load(*this);
+}
+
+void SQLHashStorage::Free()
+{
+    SQLStorageBase::Free();
+    m_indexMap.clear();
+}
+
+void SQLHashStorage::prepareToLoad(uint32 maxRecordId, uint32 recordCount, uint32 recordSize)
+{
+    // Clear (possible) old data and old index array
+    Free();
+
+    SQLStorageBase::prepareToLoad(maxRecordId, recordCount, recordSize);
+}
+
+void SQLHashStorage::EraseEntry(uint32 id)
+{
+    // do not erase from m_records
+    RecordMap::iterator find = m_indexMap.find(id);
+    if (find != m_indexMap.end())
+        find->second = nullptr;
+}
+
+SQLHashStorage::SQLHashStorage(const char* fmt, const char* _entry_field, const char* sqlname)
+{
+    Initialize(sqlname, _entry_field, fmt, fmt);
+}
+
+SQLHashStorage::SQLHashStorage(const char* src_fmt, const char* dst_fmt, const char* _entry_field, const char* sqlname)
+{
+    Initialize(sqlname, _entry_field, src_fmt, dst_fmt);
+}
+
+// -----------------------------------  SQLMultiStorage  --------------------------------------- //
+void SQLMultiStorage::Load()
+{
+    SQLMultiStorageLoader loader;
+    loader.Load(*this);
+}
+
+void SQLMultiStorage::Free()
+{
+    SQLStorageBase::Free();
+    m_indexMultiMap.clear();
+}
+
+void SQLMultiStorage::prepareToLoad(uint32 maxRecordId, uint32 recordCount, uint32 recordSize)
+{
+    // Clear (possible) old data and old index array
+    Free();
+
+    SQLStorageBase::prepareToLoad(maxRecordId, recordCount, recordSize);
+}
+
+void SQLMultiStorage::EraseEntry(uint32 id)
+{
+    m_indexMultiMap.erase(id);
+}
+
+SQLMultiStorage::SQLMultiStorage(const char* fmt, const char* _entry_field, const char* sqlname)
+{
+    Initialize(sqlname, _entry_field, fmt, fmt);
+}
+
+SQLMultiStorage::SQLMultiStorage(const char* src_fmt, const char* dst_fmt, const char* _entry_field, const char* sqlname)
+{
+    Initialize(sqlname, _entry_field, src_fmt, dst_fmt);
 }

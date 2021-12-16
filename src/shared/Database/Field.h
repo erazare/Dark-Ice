@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#if !defined(FIELD_H)
+#ifndef FIELD_H
 #define FIELD_H
+
+#include "Common.h"
 
 class Field
 {
@@ -32,15 +34,18 @@ class Field
             DB_TYPE_BOOL    = 0x04
         };
 
-        Field();
-        Field(Field &f);
-        Field(const char *value, enum DataTypes type);
+        Field() : mValue(nullptr), mType(DB_TYPE_UNKNOWN) {}
+        Field(const char* value, enum DataTypes type) : mValue(value), mType(type) {}
 
-        ~Field();
+        ~Field() {}
 
         enum DataTypes GetType() const { return mType; }
+        bool IsNULL() const { return mValue == nullptr; }
 
-        const char *GetString() const { return mValue; }
+        const char* GetString() const
+        {
+            return mValue ? mValue : ""; // We need this null check as we do not always null check what we get back from the database everywhere
+        }
         std::string GetCppString() const
         {
             return mValue ? mValue : "";                    // std::string s = 0 have undefine result in C++
@@ -51,25 +56,27 @@ class Field
         uint8 GetUInt8() const { return mValue ? static_cast<uint8>(atol(mValue)) : uint8(0); }
         uint16 GetUInt16() const { return mValue ? static_cast<uint16>(atol(mValue)) : uint16(0); }
         int16 GetInt16() const { return mValue ? static_cast<int16>(atol(mValue)) : int16(0); }
-        uint32 GetUInt32() const { return mValue ? static_cast<uint32>(atol(mValue)) : uint32(0); }
+        uint32 GetUInt32() const { return mValue ? static_cast<uint32>(atoll(mValue)) : uint32(0); }
         uint64 GetUInt64() const
         {
-            if(mValue)
-            {
-                uint64 value;
-                sscanf(mValue,UI64FMTD,&value);
-                return value;
-            }
-            else
+            uint64 value = 0;
+            if (!mValue || sscanf(mValue, UI64FMTD, &value) == -1)
                 return 0;
+
+            return value;
         }
+        time_t GetTime() const;
 
         void SetType(enum DataTypes type) { mType = type; }
-
-        void SetValue(const char *value);
+        // no need for memory allocations to store resultset field strings
+        // all we need is to cache pointers returned by different DBMS APIs
+        void SetValue(const char* value) { mValue = value; }
 
     private:
-        char *mValue;
+        Field(Field const&);
+        Field& operator=(Field const&);
+
+        const char* mValue;
         enum DataTypes mType;
 };
 #endif

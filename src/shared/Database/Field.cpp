@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,50 +16,16 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "DatabaseEnv.h"
+//#include "DatabaseEnv.h"
+#include "Field.h"
 
-Field::Field() :
-mValue(NULL), mType(DB_TYPE_UNKNOWN)
+#include <iomanip>
+
+time_t Field::GetTime() const
 {
-}
-
-Field::Field(Field &f)
-{
-    const char *value;
-
-    value = f.GetString();
-
-    if (value && (mValue = new char[strlen(value) + 1]))
-        strcpy(mValue, value);
-    else
-        mValue = NULL;
-
-    mType = f.GetType();
-}
-
-Field::Field(const char *value, enum Field::DataTypes type) :
-mType(type)
-{
-    if (value && (mValue = new char[strlen(value) + 1]))
-        strcpy(mValue, value);
-    else
-        mValue = NULL;
-}
-
-Field::~Field()
-{
-    if(mValue) delete [] mValue;
-}
-
-void Field::SetValue(const char *value)
-{
-    if(mValue) delete [] mValue;
-
-    if (value)
-    {
-        mValue = new char[strlen(value) + 1];
-        strcpy(mValue, value);
-    }
-    else
-        mValue = NULL;
+    std::string time = GetCppString();
+    std::tm tm = {};
+    std::stringstream ss(time);
+    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+    return std::mktime(&tm);
 }

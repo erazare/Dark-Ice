@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,12 +25,16 @@
 class SARC4
 {
     public:
-        SARC4();
-        SARC4(uint8 *seed);
+        SARC4(uint8 len);
+        SARC4(uint8* seed, uint8 len);
         ~SARC4();
-        void Init(uint8 *seed);
-        void UpdateData(int len, uint8 *data);
+        void Init(uint8 const* seed);
+        void UpdateData(int len, uint8* data);
     private:
+#if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x10100000L
+        EVP_CIPHER_CTX* m_ctx;
+#else
         EVP_CIPHER_CTX m_ctx;
+#endif
 };
 #endif

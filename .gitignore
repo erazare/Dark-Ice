@@ -12,7 +12,6 @@
 .*
 *.o
 *.o.*
-*.a
 *.so
 *.so.dbg
 *.bin
@@ -21,32 +20,19 @@
 #
 # Top-level generic files
 #
+bin
+build
 tags
 TAGS
-INSTALL
+win
 !.gitignore
+!.gitattributes
+!.travis.yml
 
 #
 # Build generated files
 #
-aclocal.m4
 autom4te.cache
-compile
-config.guess
-config.h.in
-config.log
-config.status
-config.sub
-configure
-depcomp
-libtool
-install-sh
-ltmain.sh
-missing
-stamp-h1
-
-Makefile.in
-Makefile
 
 #
 # Editors / debuggers / other output files
@@ -56,10 +42,13 @@ Makefile
 *.orig
 *.patch
 callgrind.out.*
+nbproject/
+.idea/
+cmake-build-*/
 
 #
 # Git stuff
-#
+!.github/
 # stgit directories
 patches-*
 
@@ -69,6 +58,36 @@ patches-*
 bin/*
 
 #
+# VS temporary files
+#
+*.ncb
+*.suo
+*.sdf
+*.opensdf
+*.opendb
+*.sln.cache
+*.vsp
+ipch
+*.user
+*.VC.db
+
+#
+# CMake temporary files
+#
+CMakeFiles
+CMakeCache.txt
+cmake_install.cmake
+
+#
+# OS specific
+#
+# MacOS
+.DS_Store
+
+#
 # Special exceptions
 #
-!dep/ACE_wrappers/ace/ace_message_table.bin
+
+# recastnavigation directory needs exception
+!dep/recastnavigation/RecastDemo/Build/
+/_build/

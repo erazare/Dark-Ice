@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,13 +41,14 @@ typedef DatabasePostgre DatabaseType;
 #include "Database/DatabaseMysql.h"
 typedef DatabaseMysql DatabaseType;
 #define _LIKE_           "LIKE"
-#define _TABLE_SIM_      "`"
+#define _TABLE_SIM_      '`'
 #define _CONCAT3_(A,B,C) "CONCAT( " A " , " B " , " C " )"
 #define _OFFSET_         "LIMIT %d,1"
 #endif
 
 extern DatabaseType WorldDatabase;
 extern DatabaseType CharacterDatabase;
-extern DatabaseType loginDatabase;
+extern DatabaseType LoginDatabase;
+extern DatabaseType LogsDatabase;
 
 #endif

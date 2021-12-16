@@ -10,8 +10,8 @@ bool isHole(int holes, int i, int j)
 {
     int testi = i / 2;
     int testj = j / 4;
-    if(testi > 3) testi = 3;
-    if(testj > 3) testj = 3;
+    if (testi > 3) testi = 3;
+    if (testj > 3) testj = 3;
     return (holes & holetab_h[testi] & holetab_v[testj]) != 0;
 }
 
@@ -44,7 +44,7 @@ bool ADT_file::prepareLoadedData()
         return false;
 
     // Check and prepare MHDR
-    a_grid = (adt_MHDR *)(GetData()+8+version->size);
+    a_grid = (adt_MHDR*)(GetData() + 8 + version->size);
     if (!a_grid->prepareLoadedData())
         return false;
 
@@ -53,10 +53,10 @@ bool ADT_file::prepareLoadedData()
 
 bool adt_MHDR::prepareLoadedData()
 {
-    if (fcc != 'MHDR')
+    if (fcc != fcc_MHDR)
         return false;
 
-    if (size!=sizeof(adt_MHDR)-8)
+    if (size != sizeof(adt_MHDR) - 8)
         return false;
 
     // Check and prepare MCIN
@@ -72,13 +72,13 @@ bool adt_MHDR::prepareLoadedData()
 
 bool adt_MCIN::prepareLoadedData()
 {
-    if (fcc != 'MCIN')
+    if (fcc != fcc_MCIN)
         return false;
 
     // Check cells data
-    for (int i=0; i<ADT_CELLS_PER_GRID;i++)
-        for (int j=0; j<ADT_CELLS_PER_GRID;j++)
-            if (cells[i][j].offsMCNK && !getMCNK(i,j)->prepareLoadedData())
+    for (int i = 0; i < ADT_CELLS_PER_GRID; i++)
+        for (int j = 0; j < ADT_CELLS_PER_GRID; j++)
+            if (cells[i][j].offsMCNK && !getMCNK(i, j)->prepareLoadedData())
                 return false;
 
     return true;
@@ -86,7 +86,7 @@ bool adt_MCIN::prepareLoadedData()
 
 bool adt_MH2O::prepareLoadedData()
 {
-    if (fcc != 'MH2O')
+    if (fcc != fcc_MH2O)
         return false;
 
     // Check liquid data
@@ -98,7 +98,7 @@ bool adt_MH2O::prepareLoadedData()
 
 bool adt_MCNK::prepareLoadedData()
 {
-    if (fcc != 'MCNK')
+    if (fcc != fcc_MCNK)
         return false;
 
     // Check height map
@@ -113,10 +113,10 @@ bool adt_MCNK::prepareLoadedData()
 
 bool adt_MCVT::prepareLoadedData()
 {
-    if (fcc != 'MCVT')
+    if (fcc != fcc_MCVT)
         return false;
 
-    if (size != sizeof(adt_MCVT)-8)
+    if (size != sizeof(adt_MCVT) - 8)
         return false;
 
     return true;
@@ -124,8 +124,5 @@ bool adt_MCVT::prepareLoadedData()
 
 bool adt_MCLQ::prepareLoadedData()
 {
-    if (fcc != 'MCLQ')
-        return false;
-
-    return true;
+    return fcc == fcc_MCLQ;
 }

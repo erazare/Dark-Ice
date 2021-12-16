@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,23 +22,30 @@
 
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
-#include "Config/ConfigEnv.h"
+#include "Config/Config.h"
+#include "ProgressBar.h"
 #include "Log.h"
 #include "Master.h"
 #include "SystemConfig.h"
 #include "../game/mangchat/IRCConf.h"
 #include "../game/mangchat/IRCClient.h"
+#include "AuctionHouseBot/AuctionHouseBot.h"
 #include "revision.h"
-#include "revision_nr.h"
+#include "PlayerBot/config.h"
+
 #include <openssl/opensslv.h>
 #include <openssl/crypto.h>
-#include <ace/Version.h>
 
-#ifdef WIN32
+#include <boost/program_options.hpp>
+#include <boost/version.hpp>
+
+#include <iostream>
+
+#ifdef _WIN32
 #include "ServiceWin32.h"
-char serviceName[] = "mangosd";
-char serviceLongName[] = "MaNGOS world service";
-char serviceDescription[] = "Massive Network Game Object Server";
+char serviceName[] = "Dark-Ice";
+char serviceLongName[] = "Dark-Ice world service";
+char serviceDescription[] = "Dark-Ice CMaNGOS Server";
 /*
  * -1 - not in service mode
  *  0 - stopped
@@ -46,11 +53,14 @@ char serviceDescription[] = "Massive Network Game Object Server";
  *  2 - paused
  */
 int m_ServiceStatus = -1;
+#else
+#include "PosixDaemon.h"
 #endif
 
 DatabaseType WorldDatabase;                                 ///< Accessor to the world database
 DatabaseType CharacterDatabase;                             ///< Accessor to the character database
-DatabaseType loginDatabase;                                 ///< Accessor to the realm/login database
+DatabaseType LoginDatabase;                                 ///< Accessor to the realm/login database
+DatabaseType LogsDatabase;                                  ///< Accessor to the logs database
 
 uint32 realmID;                                             ///< Id of the realm
 
@@ -71,12 +81,26 @@ void usage(const char *prog)
 }
 
 /// Launch the mangos server
-extern int main(int argc, char **argv)
+int main(int argc, char* argv[])
 {
-    // - Construct Memory Manager Instance
-    MaNGOS::Singleton<MemoryManager>::Instance();
+    std::string auctionBotConfig, configFile, playerBotConfig, serviceParameter;
 
-    //char *leak = new char[1000];                          // test leak detection
+    boost::program_options::options_description desc("Allowed options");
+    desc.add_options()
+    ("ahbot,a", boost::program_options::value<std::string>(&auctionBotConfig), "ahbot configuration file")
+    ("config,c", boost::program_options::value<std::string>(&configFile)->default_value(_MANGOSD_CONFIG), "configuration file")
+#ifdef BUILD_PLAYERBOT
+    ("playerbot,p", boost::program_options::value<std::string>(&playerBotConfig)->default_value(_D_PLAYERBOT_CONFIG), "playerbot configuration file")
+#endif
+    ("help,h", "prints usage")
+    ("version,v", "print version and exit")
+#ifdef _WIN32
+    ("s", boost::program_options::value<std::string>(&serviceParameter), "<run, install, uninstall> service");
+#else
+    ("s", boost::program_options::value<std::string>(&serviceParameter), "<run, stop> service");
+#endif
+
+    boost::program_options::variables_map vm;
 
     ///- Command line parsing to get the configuration file name
     char const* mc_cfg_file = _MANGCHAT_CONFIG;
@@ -84,17 +108,15 @@ extern int main(int argc, char **argv)
 
     int c=1;
     while( c < argc )
+    try
     {
-        if( strcmp(argv[c],"-c") == 0)
+        boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
+        boost::program_options::notify(vm);
+
+        if (vm.count("help"))
         {
-            if( ++c >= argc )
-            {
-                sLog.outError("Runtime-Error: -c option requires an input argument");
-                usage(argv[0]);
-                return 1;
-            }
-            else
-                cfg_file = argv[c];
+            std::cout << desc << std::endl;
+            return 0;
         }
 
         if( strcmp(argv[c],"-m") == 0)
@@ -110,52 +132,50 @@ extern int main(int argc, char **argv)
         }
 
         if( strcmp(argv[c],"--version") == 0)
+        if (vm.count("version"))
         {
-            printf("%s\n", _FULLVERSION(REVISION_DATE,REVISION_TIME,REVISION_NR,REVISION_ID));
+            std::cout << _FULLVERSION(REVISION_DATE, REVISION_ID) << std::endl;
+            std::cout << "Boost version " << (BOOST_VERSION / 10000) << "." << ((BOOST_VERSION / 100) % 1000) << "." << (BOOST_VERSION % 100) << std::endl;
             return 0;
         }
+    }
+    catch (boost::program_options::error const& e)
+    {
+        std::cerr << "ERROR: " << e.what() << std::endl << std::endl;
+        std::cerr << desc << std::endl;
 
-        #ifdef WIN32
-        ////////////
-        //Services//
-        ////////////
-        if( strcmp(argv[c],"-s") == 0)
+        return 1;
+    }
+
+    if (vm.count("ahbot"))
+        sAuctionHouseBot.SetConfigFileName(auctionBotConfig);
+
+#ifdef BUILD_PLAYERBOT
+    if (vm.count("playerbot"))
+        _PLAYERBOT_CONFIG = playerBotConfig;
+#endif
+
+#ifdef _WIN32                                                // windows service command need execute before config read
+    if (vm.count("s"))
+    {
+        switch (::tolower(serviceParameter[0]))
         {
-            if( ++c >= argc )
-            {
-                sLog.outError("Runtime-Error: -s option requires an input argument");
-                usage(argv[0]);
-                return 1;
-            }
-            if( strcmp(argv[c],"install") == 0)
-            {
+            case 'i':
                 if (WinServiceInstall())
                     sLog.outString("Installing service");
                 return 1;
-            }
-            else if( strcmp(argv[c],"uninstall") == 0)
-            {
-                if(WinServiceUninstall())
+            case 'u':
+                if (WinServiceUninstall())
                     sLog.outString("Uninstalling service");
                 return 1;
-            }
-            else
-            {
-                sLog.outError("Runtime-Error: unsupported option %s",argv[c]);
-                usage(argv[0]);
-                return 1;
-            }
+            case 'r':
+                WinServiceRun();
+                break;
         }
-        if( strcmp(argv[c],"--service") == 0)
-        {
-            WinServiceRun();
-        }
-        ////
-        #endif
-        ++c;
     }
+#endif
 
-    if (!sConfig.SetSource(cfg_file))
+    if (!sConfig.SetSource(configFile))
     {
 
         sLog.outError("Could not find configuration file %s.", cfg_file);
@@ -167,27 +187,73 @@ extern int main(int argc, char **argv)
     sLog.outString( "%s [world-daemon]", _FULLVERSION(REVISION_DATE,REVISION_TIME,REVISION_NR,REVISION_ID) );
     sLog.outString( "<Ctrl-C> to stop.\n\n" );
 
-    sLog.outTitle( "MM   MM         MM   MM  MMMMM   MMMM   MMMMM");
-    sLog.outTitle( "MM   MM         MM   MM MMM MMM MM  MM MMM MMM");
-    sLog.outTitle( "MMM MMM         MMM  MM MMM MMM MM  MM MMM");
-    sLog.outTitle( "MM M MM         MMMM MM MMM     MM  MM  MMM");
-    sLog.outTitle( "MM M MM  MMMMM  MM MMMM MMM     MM  MM   MMM");
-    sLog.outTitle( "MM M MM M   MMM MM  MMM MMMMMMM MM  MM    MMM");
-    sLog.outTitle( "MM   MM     MMM MM   MM MM  MMM MM  MM     MMM");
-    sLog.outTitle( "MM   MM MMMMMMM MM   MM MMM MMM MM  MM MMM MMM");
-    sLog.outTitle( "MM   MM MM  MMM MM   MM  MMMMMM  MMMM   MMMMM");
-    sLog.outTitle( "        MM  MMM http://getmangos.com");
-    sLog.outTitle( "        MMMMMM\n\n");
+    sLog.outTitle( "                         P   R   O   J   E   C   T                             ");	
+    sLog.outTitle( "                                                                               ");	
+    sLog.outTitle( ":::::::::      :::     :::::::::  :::    :::  ::::::::::: ::::::::  :::::::::: ");
+	sLog.outTitle( ":+:    :+:   :+: :+:   :+:    :+: :+:   :+:       :+:    :+:    :+: :+:        ");
+	sLog.outTitle( "+:+    +:+  +:+   +:+  +:+    +:+ +:+  +:+        +:+    +:+        +:+        ");
+    sLog.outTitle( "+#+    +:+ +#++:++#++: +#++:++#:  +#++:++         +#+    +#+        +#++:++#   ");
+    sLog.outTitle( "+#+    +#+ +#+     +#+ +#+    +#+ +#+  +#+        +#+    +#+        +#+        ");
+    sLog.outTitle( "#+#    #+# #+#     #+# #+#    #+# #+#   #+#       #+#    #+#    #+# #+#        ");
+    sLog.outTitle( "#########  ###     ### ###    ### ###    ###  ########### ########  ########## ");
+    sLog.outTitle( "                                                                               ");	
+	sLog.outTitle( "GIT: https://github.com/3raZar3/Dark-Ice-WOTLK                                 ");
+	sLog.outTitle( "Project Dark-iCE: https://discord.gg/2a3wPk8                                   ");
 
     sLog.outString("Using configuration file %s.", cfg_file);
 
     sLog.outDetail("%s (Library: %s)", OPENSSL_VERSION_TEXT, SSLeay_version(SSLEAY_VERSION));
     if (SSLeay() < 0x009080bfL )
-    {
-        sLog.outDetail("WARNING: Outdated version of OpenSSL lib. Logins to server may not work!");
-        sLog.outDetail("WARNING: Minimal required version [OpenSSL 0.9.8k]");
+        sLog.outError("Could not find configuration file %s.", configFile.c_str());
+        Log::WaitBeforeContinueIfNeed();
+        return 1;
     }
-    sLog.outDetail("Using ACE: %s", ACE_VERSION);
+
+#ifndef _WIN32                                               // posix daemon commands need apply after config read
+    if (vm.count("s"))
+    {
+        switch (::tolower(serviceParameter[0]))
+        {
+            case 'r':
+                startDaemon();
+                break;
+            case 's':
+                stopDaemon();
+                break;
+        }
+    }
+#endif
+
+    sLog.outString("[%s World server v%s] id(%d) port(%d)", _PACKAGENAME, VERSION
+        , sConfig.GetIntDefault("RealmID", -1), sConfig.GetIntDefault("WorldServerPort", -1));
+    sLog.outString("\n\n"
+        "       _____     __  __       _   _  _____  ____   _____ \n"
+        "      / ____|   |  \\/  |     | \\ | |/ ____|/ __ \\ / ____|\n"
+        "     | |        | \\  / |     |  \\| | |  __  |  | | (___  \n"
+        "     | |ontinued| |\\/| | __ _| . ` | | |_ | |  | |\\___ \\ \n"
+        "     | |____    | |  | |/ _` | |\\  | |__| | |__| |____) |\n"
+        "      \\_____|   |_|  |_| (_| |_| \\_|\\_____|\\____/ \\____/ \n"
+        "      http://cmangos.net\\__,_|     Doing emulation right!\n\n");
+
+    sLog.outString("Built on %s at %s", __DATE__, __TIME__);
+    sLog.outString("Built for %s", _ENDIAN_PLATFORM);
+    sLog.outString("Using commit hash(%s) committed on %s", REVISION_ID, REVISION_DATE);
+    sLog.outString("Using configuration file %s.", configFile.c_str());
+
+    DETAIL_LOG("%s (Library: %s)", OPENSSL_VERSION_TEXT, SSLeay_version(SSLEAY_VERSION));
+    if (SSLeay() < 0x009080bfL)
+    {
+        DETAIL_LOG("WARNING: Outdated version of OpenSSL lib. Logins to server may not work!");
+        DETAIL_LOG("WARNING: Minimal required version [OpenSSL 0.9.8k]");
+    }
+
+    DETAIL_LOG("Using Boost: %s", BOOST_LIB_VERSION);
+
+    sLog.outString();
+    sLog.outString("<Ctrl-C> to stop.");
+
+    ///- Set progress bars show mode
+    BarGoLink::SetOutputState(sConfig.GetBoolDefault("ShowProgressBars", false));
 
     ///- and run the 'Master'
     /// \todo Why do we need this 'Master'? Can't all of this be in the Main as for Realmd?

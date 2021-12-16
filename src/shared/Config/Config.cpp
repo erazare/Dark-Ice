@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,99 +16,100 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "ConfigEnv.h"
-#include "Policies/SingletonImp.h"
+#include "Config.h"
+#include "Policies/Singleton.h"
+#include <mutex>
+
+#include <boost/algorithm/string.hpp>
+
+#include <unordered_map>
+#include <string>
+#include <fstream>
 
 INSTANTIATE_SINGLETON_1(Config);
 
-Config::Config()
-: mIgnoreCase(true), mConf(NULL)
+bool Config::SetSource(const std::string& file)
 {
-}
-
-Config::~Config()
-{
-    delete mConf;
-}
-
-bool Config::SetSource(const char *file, bool ignorecase)
-{
-    mIgnoreCase = ignorecase;
-    mFilename = file;
+    m_filename = file;
 
     return Reload();
 }
 
 bool Config::Reload()
 {
-    delete mConf;
+    std::ifstream in(m_filename, std::ifstream::in);
 
-    mConf = new DOTCONFDocument(mIgnoreCase ?
-        DOTCONFDocument::CASEINSENSETIVE :
-    DOTCONFDocument::CASESENSITIVE);
-
-    if (mConf->setContent(mFilename.c_str()) == -1)
-    {
-        delete mConf;
-        mConf = NULL;
+    if (in.fail())
         return false;
+
+    std::unordered_map<std::string, std::string> newEntries;
+    std::lock_guard<std::mutex> guard(m_configLock);
+
+    do
+    {
+        std::string line;
+        std::getline(in, line);
+
+        boost::algorithm::trim_left(line);
+
+        if (!line.length())
+            continue;
+
+        if (line[0] == '#' || line[0] == '[')
+            continue;
+
+        auto const equals = line.find('=');
+        if (equals == std::string::npos)
+            return false;
+
+        auto const entry = boost::algorithm::trim_copy(boost::algorithm::to_lower_copy(line.substr(0, equals)));
+        auto const value = boost::algorithm::trim_copy_if(boost::algorithm::trim_copy(line.substr(equals + 1)), boost::algorithm::is_any_of("\""));
+
+        newEntries[entry] = value;
     }
+    while (in.good());
+
+    m_entries = std::move(newEntries);
 
     return true;
 }
 
-std::string Config::GetStringDefault(const char* name, const char* def)
+bool Config::IsSet(const std::string& name) const
 {
-    if (!mConf)
-        return std::string(def);
-
-    DOTCONFDocumentNode const *node = mConf->findNode(name);
-    if (!node || !node->getValue())
-        return std::string(def);
-
-    return std::string(node->getValue());
+    auto const nameLower = boost::algorithm::to_lower_copy(name);
+    return m_entries.find(nameLower) != m_entries.cend();
 }
 
-bool Config::GetBoolDefault(const char* name, bool def)
+const std::string Config::GetStringDefault(const std::string& name, const std::string& def) const
 {
-    if (!mConf)
-        return def;
+    auto const nameLower = boost::algorithm::to_lower_copy(name);
 
-    DOTCONFDocumentNode const *node = mConf->findNode(name);
-    if (!node || !node->getValue())
-        return def;
+    auto const entry = m_entries.find(nameLower);
 
-    const char* str = node->getValue();
-    if (strcmp(str, "true") == 0 || strcmp(str, "TRUE") == 0 ||
-        strcmp(str, "yes") == 0 || strcmp(str, "YES") == 0 ||
-        strcmp(str, "1") == 0)
-        return true;
-    else
-        return false;
+    return entry == m_entries.cend() ? def : entry->second;
 }
 
-
-int32 Config::GetIntDefault(const char* name, int32 def)
+bool Config::GetBoolDefault(const std::string& name, bool def) const
 {
-    if (!mConf)
-        return def;
+    auto const value = GetStringDefault(name, def ? "true" : "false");
 
-    DOTCONFDocumentNode const *node = mConf->findNode(name);
-    if (!node || !node->getValue())
-        return def;
+    std::string valueLower;
+    std::transform(value.cbegin(), value.cend(), std::back_inserter(valueLower), ::tolower);
 
-    return atoi(node->getValue());
+    return valueLower == "true" || valueLower == "1" || valueLower == "yes";
 }
 
-
-float Config::GetFloatDefault(const char* name, float def)
+int32 Config::GetIntDefault(const std::string& name, int32 def) const
 {
-    if (!mConf)
-        return def;
+    auto const value = GetStringDefault(name, std::to_string(def));
 
-    DOTCONFDocumentNode const *node = mConf->findNode(name);
-    if (!node || !node->getValue())
-        return def;
-
-    return atof(node->getValue());
+    return std::stoi(value);
 }
+
+float Config::GetFloatDefault(const std::string& name, float def) const
+{
+    auto const value = GetStringDefault(name, std::to_string(def));
+
+    return std::stof(value);
+}
+

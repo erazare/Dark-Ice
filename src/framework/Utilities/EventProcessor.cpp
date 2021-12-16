@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,28 +71,57 @@ void EventProcessor::KillAllEvents(bool force)
 
         i_old->second->to_Abort = true;
         i_old->second->Abort(m_time);
-        if(force || i_old->second->IsDeletable())
+        if (force || i_old->second->IsDeletable())
         {
             delete i_old->second;
 
-            if(!force)                                      // need per-element cleanup
-                m_events.erase (i_old);
+            if (!force)                                     // need per-element cleanup
+                m_events.erase(i_old);
         }
     }
 
     // fast clear event list (in force case)
-    if(force)
+    if (force)
         m_events.clear();
+}
+
+void EventProcessor::KillEvent(BasicEvent* event)
+{
+    for (EventList::iterator iter = m_events.begin(); iter != m_events.end();)
+    {
+        if (iter->second == event)
+        {
+            delete iter->second;
+            iter = m_events.erase(iter);
+        }
+        else ++iter;
+    }
 }
 
 void EventProcessor::AddEvent(BasicEvent* Event, uint64 e_time, bool set_addtime)
 {
-    if (set_addtime) Event->m_addTime = m_time;
+    if (set_addtime)
+        Event->m_addTime = m_time;
+
     Event->m_execTime = e_time;
     m_events.insert(std::pair<uint64, BasicEvent*>(e_time, Event));
 }
 
-uint64 EventProcessor::CalculateTime(uint64 t_offset)
+void EventProcessor::ModifyEventTime(BasicEvent* Event, uint64 msTime)
 {
-    return(m_time + t_offset);
+    for (auto itr = m_events.begin(); itr != m_events.end(); ++itr)
+    {
+        if (itr->second != Event)
+            continue;
+
+        Event->m_execTime = msTime;
+        m_events.erase(itr);
+        m_events.insert(std::pair<uint64, BasicEvent*>(msTime, Event));
+        break;
+    }
+}
+
+uint64 EventProcessor::CalculateTime(uint64 t_offset) const
+{
+    return m_time + t_offset;
 }

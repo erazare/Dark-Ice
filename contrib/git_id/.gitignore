@@ -11,9 +11,7 @@
 #
 
 *.bsc
-*.ncb
 *.pdb
-*.suo
 Debug
 Release
-*.user
+git_id

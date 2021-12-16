@@ -1,12 +1,49 @@
-//add here most rarely modified headers to speed up debug build compilation
-#include "WorldSocket.h"                                    // must be first to make ACE happy with ACE includes in it
-#include "Common.h"
+// add here most rarely modified headers to speed up debug build compilation
+#ifndef PCHDEF_H
+#define PCHDEF_H
 
-#include "MapManager.h"
+#include "Platform/Define.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <cmath>
+#include <errno.h>
+#include <signal.h>
+#include <assert.h>
+#include <set>
+#include <list>
+#include <string>
+#include <map>
+#include <queue>
+#include <sstream>
+#include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
+#include <chrono>
+#include "Errors.h"
+#include "Threading.h"
+#include <thread>
+#include <boost/asio.hpp>
+#include "Common.h"
 #include "Log.h"
-#include "ObjectAccessor.h"
-#include "ObjectDefines.h"
-#include "Database/SQLStorage.h"
-#include "Opcodes.h"
-#include "SharedDefines.h"
-#include "ObjectMgr.h"
+#include "Server/SQLStorages.h"
+#include "Server/DBCStructure.h"
+#include "Server/DBCStores.h"
+#include "Globals/ObjectAccessor.h"
+#include "Server/Opcodes.h"
+#include "ByteBuffer.h"
+#include "Entities/UpdateFields.h"
+#include "Entities/UpdateData.h"
+#include "Globals/SharedDefines.h"
+#include "Globals/ObjectMgr.h"
+#include "DBScripts/ScriptMgr.h"
+#include "Entities/ObjectGuid.h"
+#include "Entities/Object.h"
+#include "AI/BaseAI/CreatureAI.h"
+#include "AI/ScriptDevAI/ScriptDevAIMgr.h"
+#include "AI/ScriptDevAI/include/sc_creature.h"
+#include "AI/ScriptDevAI/include/sc_gossip.h"
+#include "AI/ScriptDevAI/include/sc_grid_searchers.h"
+#include "AI/ScriptDevAI/include/sc_instance.h"
+#endif // PCHDEF_H

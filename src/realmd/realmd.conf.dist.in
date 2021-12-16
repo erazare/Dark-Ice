@@ -1,7 +1,9 @@
 ############################################
 # MaNGOS realmd configuration file         #
 ############################################
-ConfVersion=2007062001
+
+[RealmdConf]
+ConfVersion=2021031501
 
 ###################################################################################################################
 # REALMD SETTINGS
@@ -17,17 +19,24 @@ ConfVersion=2007062001
 #    LogsDir
 #         Logs directory setting.
 #         Important: Logs dir must exists, or all logs be disable
-#         Default: "" - no log directory prefix, if used log names isn't absolute path then logs will be
-#                       stored in current directory for run program.
+#         Default: "" - no log directory prefix. if used log names aren't absolute paths
+#                       then logs will be stored in the current directory of the running program.
 #
 #    MaxPingTime
 #         Settings for maximum database-ping interval (minutes between pings)
 #
 #    RealmServerPort
-#         Default RealmServerPort
+#         Port on which the server will listen
 #
 #    BindIP
-#         Bind Realm Server to IP/hostname
+#         Bind Realm Server to specific IP address
+#         This option is useful for running multiple worldd/realmd instances
+#         on different IP addresses using default ports.
+#         DO NOT CHANGE THIS UNLESS YOU _REALLY_ KNOW WHAT YOU'RE DOING
+#
+#    ListenerThreads
+#        Number of listener threads realmd should use.
+#        Default: 1
 #
 #    PidFile
 #        Realmd daemon PID file
@@ -76,10 +85,21 @@ ConfVersion=2007062001
 #        Default: 1 (HIGH)
 #                 0 (Normal)
 #
+#    WaitAtStartupError
+#        After startup error report wait <Enter> or some time before continue (and possible close console window)
+#                 -1 (wait until <Enter> press)
+#        Default:  0 (not wait)
+#                  N (>0, wait N secs)
+#
 #    RealmsStateUpdateDelay
 #        Realm list Update up delay (updated at realm list request if delay expired).
 #        Default: 20
 #                 0  (Disabled)
+#
+#    StrictVersionCheck
+#        Description: Prevent modified clients from connnecting
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
 #
 #    WrongPass.MaxCount
 #        Number of login attemps with wrong password before the account or IP is banned
@@ -96,11 +116,12 @@ ConfVersion=2007062001
 #
 ###################################################################################################################
 
-LoginDatabaseInfo = "127.0.0.1;3306;root;mangos;realmd"
+LoginDatabaseInfo = "127.0.0.1;3306;mangos;mangos;wotlkrealmd"
 LogsDir = ""
 MaxPingTime = 30
 RealmServerPort = 3724
 BindIP = "0.0.0.0"
+ListenerThreads = 1
 PidFile = ""
 LogLevel = 0
 LogTime = 0
@@ -110,7 +131,9 @@ LogFileLevel = 0
 LogColors = ""
 UseProcessors = 0
 ProcessPriority = 1
+WaitAtStartupError = 0
 RealmsStateUpdateDelay = 20
+StrictVersionCheck = 0
 WrongPass.MaxCount = 0
 WrongPass.BanTime = 600
 WrongPass.BanType = 0

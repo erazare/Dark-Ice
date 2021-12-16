@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,20 +19,47 @@
 #ifndef _DatabasePostgre_H
 #define _DatabasePostgre_H
 
+#include "Common.h"
+#include "Database.h"
 #include "Policies/Singleton.h"
 #include <stdarg.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #define FD_SETSIZE 1024
 #include <winsock2.h>
 #include <postgre/libpq-fe.h>
 #else
-#include <libpq-fe.h>
+#include <postgresql/libpq-fe.h>
 #endif
+
+class PostgreSQLConnection : public SqlConnection
+{
+    public:
+        PostgreSQLConnection(Database& db) : SqlConnection(db), mPGconn(nullptr) {}
+        ~PostgreSQLConnection();
+
+        bool Initialize(const char* infoString) override;
+
+        QueryResult* Query(const char* sql) override;
+        QueryNamedResult* QueryNamed(const char* sql) override;
+        bool Execute(const char* sql) override;
+
+        unsigned long escape_string(char* to, const char* from, unsigned long length);
+
+        bool BeginTransaction() override;
+        bool CommitTransaction() override;
+        bool RollbackTransaction() override;
+
+    private:
+        bool _TransactionCmd(const char* sql);
+        bool _Query(const char* sql, PGresult** pResult, uint64* pRowCount, uint32* pFieldCount);
+
+        PGconn* mPGconn;
+};
 
 class DatabasePostgre : public Database
 {
-    friend class MaNGOS::OperatorNew<DatabasePostgre>;
+        friend class MaNGOS::OperatorNew<DatabasePostgre>;
 
     public:
         DatabasePostgre();
@@ -40,35 +67,11 @@ class DatabasePostgre : public Database
 
         //! Initializes Postgres and connects to a server.
         /*! infoString should be formated like hostname;username;password;database. */
-        bool Initialize(const char *infoString);
-        void InitDelayThread();
-        void HaltDelayThread();
-        QueryResult* Query(const char *sql);
-        QueryNamedResult* QueryNamed(const char *sql);
-        bool Execute(const char *sql);
-        bool DirectExecute(const char* sql);
-        bool BeginTransaction();
-        bool CommitTransaction();
-        bool RollbackTransaction();
 
-        operator bool () const { return mPGconn != NULL; }
+    protected:
+        virtual SqlConnection* CreateConnection() override;
 
-        unsigned long escape_string(char *to, const char *from, unsigned long length);
-        using Database::escape_string;
-
-        // must be call before first query in thread
-        void ThreadStart();
-        // must be call before finish thread run
-        void ThreadEnd();
     private:
-        ACE_Thread_Mutex mMutex;
-        ACE_Based::Thread * tranThread;
-
-        PGconn *mPGconn;
-
         static size_t db_count;
-
-        bool _TransactionCmd(const char *sql);
-        bool _Query(const char *sql, PGresult **pResult, uint64* pRowCount, uint32* pFieldCount);
 };
 #endif

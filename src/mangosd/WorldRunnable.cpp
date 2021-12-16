@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,19 +20,17 @@
     \ingroup mangosd
 */
 
-#include "WorldSocketMgr.h"
 #include "Common.h"
-#include "World.h"
+#include "World/World.h"
 #include "WorldRunnable.h"
 #include "Timer.h"
-#include "MapManager.h"
-#include "BattleGroundMgr.h"
+#include "Maps/MapManager.h"
 
 #include "Database/DatabaseEnv.h"
 
 #define WORLD_SLEEP_CONST 50
 
-#ifdef WIN32
+#ifdef _WIN32
 #include "ServiceWin32.h"
 extern int m_ServiceStatus;
 #endif
@@ -41,53 +39,44 @@ extern int m_ServiceStatus;
 void WorldRunnable::run()
 {
     ///- Init new SQL thread for the world database
-    WorldDatabase.ThreadStart();                                // let thread do safe mySQL requests (one connection call enough)
+    WorldDatabase.ThreadStart();                            // let thread do safe mySQL requests (one connection call enough)
     sWorld.InitResultQueue();
 
-    uint32 realCurrTime = 0;
-    uint32 realPrevTime = getMSTime();
-
-    uint32 prevSleepTime = 0;                               // used for balanced full tick time length near WORLD_SLEEP_CONST
+    uint32 diffTick = WorldTimer::tick(); // initialize world timer vars
+    uint32 diffTime = 0; // used to compute real time elapsed in World::Update()
+    uint32 overCounter = 0; // count overtime loops
 
     ///- While we have not World::m_stopEvent, update the world
     while (!World::IsStopped())
     {
         ++World::m_worldLoopCounter;
-        realCurrTime = getMSTime();
 
-        uint32 diff = getMSTimeDiff(realPrevTime,realCurrTime);
+        diffTick = WorldTimer::tick();
+        sWorld.Update(diffTick);
+        diffTime = WorldTimer::getMSTime() - WorldTimer::tickTime();
 
-        sWorld.Update( diff );
-        realPrevTime = realCurrTime;
-
-        // diff (D0) include time of previous sleep (d0) + tick time (t0)
-        // we want that next d1 + t1 == WORLD_SLEEP_CONST
-        // we can't know next t1 and then can use (t0 + d1) == WORLD_SLEEP_CONST requirement
-        // d1 = WORLD_SLEEP_CONST - t0 = WORLD_SLEEP_CONST - (D0 - d0) = WORLD_SLEEP_CONST + d0 - D0
-        if (diff <= WORLD_SLEEP_CONST+prevSleepTime)
+        // we have to wait WORLD_SLEEP_CONST max between loops
+        // don't wait if over
+        if (diffTime < WORLD_SLEEP_CONST)
         {
-            prevSleepTime = WORLD_SLEEP_CONST+prevSleepTime-diff;
-            ACE_Based::Thread::Sleep(prevSleepTime);
+            MaNGOS::Thread::Sleep(WORLD_SLEEP_CONST - diffTime);
         }
+#ifdef MANGOS_DEBUG
         else
-            prevSleepTime = 0;
+        {
+            ++overCounter;
+            sLog.outString("WorldRunnable:run Long loop #%d : %dms (total : %d loop(s), %.3f%%)", World::m_worldLoopCounter, diffTime, overCounter, (float)(100*overCounter) / (float)World::m_worldLoopCounter);
+        }
+#endif
 
-        #ifdef WIN32
-            if (m_ServiceStatus == 0) World::StopNow(SHUTDOWN_EXIT_CODE);
-            while (m_ServiceStatus == 2) Sleep(1000);
-        #endif
+#ifdef _WIN32
+        if (m_ServiceStatus == 0) World::StopNow(SHUTDOWN_EXIT_CODE);
+        while (m_ServiceStatus == 2) Sleep(1000);
+#endif
     }
 
-    sWorld.KickAll();                                       // save and kick all players
-    sWorld.UpdateSessions( 1 );                             // real players unload required UpdateSessions call
-
-    // unload battleground templates before different singletons destroyed
-    sBattleGroundMgr.DeleteAllBattleGrounds();
-
-    sWorldSocketMgr->StopNetwork();
-
-    MapManager::Instance().UnloadAll();                     // unload all grids (including locked in memory)
+    sWorld.CleanupsBeforeStop();
 
     ///- End the database thread
-    WorldDatabase.ThreadEnd();                                  // free mySQL thread resources
+    WorldDatabase.ThreadEnd();                              // free mySQL thread resources
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,32 +21,49 @@
 
 #include "Utilities/LinkedReference/Reference.h"
 
-template<class OBJECT>
-class GridRefManager;
+template<class OBJECT> class GridRefManager;
 
 template<class OBJECT>
-class MANGOS_DLL_SPEC GridReference : public Reference<GridRefManager<OBJECT>, OBJECT>
+class GridReference : public Reference<GridRefManager<OBJECT>, OBJECT>
 {
     protected:
-        void targetObjectBuildLink()
+
+        void targetObjectBuildLink() override
         {
             // called from link()
             this->getTarget()->insertFirst(this);
             this->getTarget()->incSize();
         }
-        void targetObjectDestroyLink()
+
+        void targetObjectDestroyLink() override
         {
             // called from unlink()
-            if(this->isValid()) this->getTarget()->decSize();
+            if (this->isValid())
+                this->getTarget()->decSize();
         }
-        void sourceObjectDestroyLink()
+
+        void sourceObjectDestroyLink() override
         {
             // called from invalidate()
             this->getTarget()->decSize();
         }
+
     public:
-        GridReference() : Reference<GridRefManager<OBJECT>, OBJECT>() {}
-        ~GridReference() { this->unlink(); }
-        GridReference *next() { return (GridReference*)Reference<GridRefManager<OBJECT>, OBJECT>::next(); }
+
+        GridReference()
+            : Reference<GridRefManager<OBJECT>, OBJECT>()
+        {
+        }
+
+        ~GridReference()
+        {
+            this->unlink();
+        }
+
+        GridReference* next()
+        {
+            return (GridReference*)Reference<GridRefManager<OBJECT>, OBJECT>::next();
+        }
 };
+
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,42 +24,42 @@
 #define _RASOCKET_H
 
 #include "Common.h"
-#include "sockets/TcpSocket.h"
 
-#define RA_BUFF_SIZE 1024
+#include "Network/Socket.hpp"
 
-class ISocketHandler;
+#include <functional>
+#include <vector>
+#include <string>
 
 /// Remote Administration socket
-class RASocket: public TcpSocket
+class RASocket : public MaNGOS::Socket
 {
-    public:
-
-        RASocket(ISocketHandler& h);
-        ~RASocket();
-
-        void OnAccept();
-        void OnRead();
-
     private:
-
-        char * buff;
-        std::string szLogin;
-        uint32 iSess;
-        unsigned int iInputLength;
-        bool bLog;
-        bool bSecure;                                       //kick on wrong pass, non exist. user, user with no priv
-        //will protect from DOS, bruteforce attacks
-        //some 'smart' protection must be added for more security
-        uint8 iMinLevel;
-        enum
+        enum AuthLevel
         {
-            NONE,                                           //initial value
-            LG,                                             //only login was entered
-            OK,                                             //both login and pass were given, and they are correct and user have enough priv.
-        }stage;
+            None,
+            HaveUsername,
+            Authenticated
+        };
 
-        static void zprint( const char * szText );
+        const bool m_secure;
+        bool m_restricted;
+
+        std::string m_input;
+
+        AuthLevel m_authLevel;
+        AccountTypes m_accountLevel;
+        uint32 m_accountId;
+
+        virtual bool ProcessIncomingData() override;
+        bool HandleInput();
+        void Send(const std::string& message);
+
+    public:
+        RASocket(boost::asio::io_service& service, std::function<void (Socket*)> closeHandler);
+        virtual ~RASocket();
+
+        virtual bool Open() override;
 };
 #endif
 /// @}
